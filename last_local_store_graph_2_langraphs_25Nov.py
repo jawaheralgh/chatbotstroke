@@ -34,18 +34,6 @@ try:
 except ImportError:
     HAS_AUDIO_RECORDER = False
 
-import sys
-import traceback
-
-try:
-    # Your existing code here
-    load_dotenv()
-    embeddings = load_embeddings()
-    # etc...
-except Exception as e:
-    st.error(f"🔴 Startup Error: {str(e)}")
-    st.code(traceback.format_exc())
-    st.stop()
 
 ###############################################################################
 # ENV + INITIALIZATION
@@ -53,69 +41,65 @@ except Exception as e:
 load_dotenv()
 
 
+# Define the function BEFORE calling it
 @st.cache_resource
 def load_embeddings():
-    from langchain_huggingface import HuggingFaceEmbeddings
     return HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-mpnet-base-v2",
         model_kwargs={"device": "cpu"},
         encode_kwargs={"normalize_embeddings": True}
     )
 
-embeddings = load_embeddings()
 
 @st.cache_resource
 def load_local_vector_store():
-    from langchain_community.vectorstores import FAISS
+    """Load FAISS index from local folder 'faiss_index'."""
+    embeddings_model = load_embeddings()  # Call it here instead
     try:
-        # Try to load local FAISS index
         try:
-            vs = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
+            vs = FAISS.load_local(
+                "faiss_index",
+                embeddings_model,
+                allow_dangerous_deserialization=True
+            )
         except TypeError:
-            vs = FAISS.load_local("faiss_index", embeddings)
+            vs = FAISS.load_local("faiss_index", embeddings_model)
+
         st.success("✅ Loaded local FAISS vector store!")
         return vs
-    except FileNotFoundError:
-        st.error("❌ FAISS index folder 'faiss_index' not found in repo. The app will continue in read-only mode without vector search.")
-        return None
+
     except Exception as e:
         st.error(f"❌ Could not load local FAISS index: {e}")
-        return None
+        st.stop()
 
-vector_store = load_local_vector_store()
 
 @st.cache_resource
 def load_kg_and_map():
-    # Robust spaCy model load: try to load, otherwise download
+    # Download model if not present
     try:
         nlp_local = spacy.load("en_core_web_sm")
-    except Exception:
-        try:
-            import spacy.cli
-            spacy.cli.download("en_core_web_sm")
-            nlp_local = spacy.load("en_core_web_sm")
-        except Exception as e:
-            st.error(f"Could not load or download spaCy model: {e}")
-            nlp_local = None
+    except OSError:
+        import subprocess
+        import sys
+        st.info("📦 Downloading spacy model...")
+        subprocess.check_call([
+            sys.executable, "-m", "spacy", "download", "en_core_web_sm"
+        ])
+        nlp_local = spacy.load("en_core_web_sm")
 
-    try:
-        with open("kg.gpickle_local1", "rb") as f:
-            G = pickle.load(f)
-    except Exception as e:
-        st.error(f"Could not load knowledge graph 'kg.gpickle_local1': {e}")
-        G = nx.Graph()
+    with open("kg.gpickle_local1", "rb") as f:
+        G = pickle.load(f)
 
-    try:
-        with open("chunk_map_local1.json", "r", encoding="utf-8") as f:
-            chunk_map_local = json.load(f)
-    except Exception as e:
-        st.error(f"Could not load chunk map 'chunk_map_local1.json': {e}")
-        chunk_map_local = {}
+    with open("chunk_map_local1.json", "r", encoding="utf-8") as f:
+        chunk_map_local = json.load(f)
 
     return nlp_local, G, chunk_map_local, list(G.nodes)
 
-nlp, KG, chunk_map, node_names = load_kg_and_map()
 
+# NOW call the functions
+embeddings = load_embeddings()
+vector_store = load_local_vector_store()
+nlp, KG, chunk_map, node_names = load_kg_and_map()
 
 ###############################################################################
 # GRAPH RETRIEVAL HELPERS
