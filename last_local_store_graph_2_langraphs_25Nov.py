@@ -586,27 +586,41 @@ with col1:
         user_input = text_input
 
 with col2:
-    st.markdown("#### 🎤 Voice")
-    
-    # Use Streamlit's native audio input (more stable)
-    audio_value = st.audio_input("Record your question", key="voice_input")
-    
-    if audio_value is not None:
-        # Check if this is NEW audio
-        audio_bytes = audio_value.getvalue()
+    if HAS_AUDIO_RECORDER:
+        st.markdown("#### 🎤 Voice")
         
-        if audio_bytes != st.session_state.last_audio_bytes and not st.session_state.processing:
-            st.session_state.processing = True
-            st.session_state.last_audio_bytes = audio_bytes
-            
-            with st.spinner("🎤 Transcribing audio..."):
-                transcribed = transcribe_audio(audio_bytes)
+        # Initialize audio recorder with error handling
+        try:
+            # Only show after app is initialized
+            if st.session_state.get("app_initialized", False):
+                audio_bytes = audio_recorder(
+                    text="",
+                    recording_color="#e74c3c",
+                    neutral_color="#3498db",
+                    icon_size="1x",
+                    key="audio_recorder"
+                )
 
-            if not transcribed.startswith("Sorry") and not transcribed.startswith("Error"):
-                user_input = transcribed
+                # Check if this is NEW audio (not already processed)
+                if audio_bytes and audio_bytes != st.session_state.last_audio_bytes and not st.session_state.processing:
+                    st.session_state.processing = True
+                    st.session_state.last_audio_bytes = audio_bytes
+                    
+                    with st.spinner("🎤 Transcribing audio..."):
+                        transcribed = transcribe_audio(audio_bytes)
+
+                    if not transcribed.startswith("Sorry") and not transcribed.startswith("Error"):
+                        user_input = transcribed
+                    else:
+                        st.error(transcribed)
+                        st.session_state.processing = False
             else:
-                st.error(transcribed)
-                st.session_state.processing = False
+                st.info("Loading voice input...")
+                
+        except Exception as e:
+            st.warning("🎤 Voice input temporarily unavailable. Please use text input below.")
+    else:
+        st.info("Voice input available after installing audio-recorder-streamlit")
 
 
 # Processing
