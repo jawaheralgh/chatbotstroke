@@ -44,57 +44,66 @@ load_dotenv()
 
 @st.cache_resource
 def load_embeddings():
+    from langchain_huggingface import HuggingFaceEmbeddings
     return HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-mpnet-base-v2",
         model_kwargs={"device": "cpu"},
         encode_kwargs={"normalize_embeddings": True}
     )
 
-
 embeddings = load_embeddings()
-
 
 @st.cache_resource
 def load_local_vector_store():
-    """Load FAISS index from local folder 'faiss_index'."""
+    from langchain_community.vectorstores import FAISS
     try:
-        # Newer versions require allow_dangerous_deserialization=True
+        # Try to load local FAISS index
         try:
-            vs = FAISS.load_local(
-                "faiss_index",
-                embeddings,
-                allow_dangerous_deserialization=True
-            )
+            vs = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
         except TypeError:
-            # Older versions do not accept that argument
             vs = FAISS.load_local("faiss_index", embeddings)
-
         st.success("✅ Loaded local FAISS vector store!")
         return vs
-
+    except FileNotFoundError:
+        st.error("❌ FAISS index folder 'faiss_index' not found in repo. The app will continue in read-only mode without vector search.")
+        return None
     except Exception as e:
         st.error(f"❌ Could not load local FAISS index: {e}")
-        st.stop()
-
+        return None
 
 vector_store = load_local_vector_store()
 
-
 @st.cache_resource
 def load_kg_and_map():
-    nlp_local = spacy.load("en_core_web_sm")
+    # Robust spaCy model load: try to load, otherwise download
+    try:
+        nlp_local = spacy.load("en_core_web_sm")
+    except Exception:
+        try:
+            import spacy.cli
+            spacy.cli.download("en_core_web_sm")
+            nlp_local = spacy.load("en_core_web_sm")
+        except Exception as e:
+            st.error(f"Could not load or download spaCy model: {e}")
+            nlp_local = None
 
-    with open("kg.gpickle_local1", "rb") as f:
-        G = pickle.load(f)
+    try:
+        with open("kg.gpickle_local1", "rb") as f:
+            G = pickle.load(f)
+    except Exception as e:
+        st.error(f"Could not load knowledge graph 'kg.gpickle_local1': {e}")
+        G = nx.Graph()
 
-    with open("chunk_map_local1.json", "r", encoding="utf-8") as f:
-        chunk_map_local = json.load(f)
+    try:
+        with open("chunk_map_local1.json", "r", encoding="utf-8") as f:
+            chunk_map_local = json.load(f)
+    except Exception as e:
+        st.error(f"Could not load chunk map 'chunk_map_local1.json': {e}")
+        chunk_map_local = {}
 
     return nlp_local, G, chunk_map_local, list(G.nodes)
 
-
 nlp, KG, chunk_map, node_names = load_kg_and_map()
-
 
 
 ###############################################################################
