@@ -1,33 +1,30 @@
+# Streamlit Web App
 streamlit==1.39.0
+audio-recorder-streamlit>=0.0.6
+SpeechRecognition>=3.8.1
 
-# ---- spaCy ----
-spacy==3.7.2
-# Prevent BLIS from compiling from source
-blis==0.7.11 --only-binary=:all:
+# LangChain + LangGraph
+langchain>=0.3.0
+langchain-community>=0.3.0
+langchain-groq>=0.1.0
+langgraph>=0.0.20
 
-# spaCy will auto-download the model inside app.py
-# DO NOT include en-core-web-sm wheel link
-
-# ---- LangChain Stack ----
-langchain==0.2.10
-langgraph==0.2.3
-networkx==3.1
-pyvis==0.3.2
-
-# ---- Vector & Embeddings ----
-faiss-cpu==1.7.4
+# Local FAISS vector store
+faiss-cpu==1.8.0
 sentence-transformers==3.0.1
+langchain-huggingface>=0.0.3
 
-# ---- LLM Providers ----
-langchain-huggingface==0.0.10
-langchain-groq==0.1.0
+# Knowledge Graph
+networkx>=3.1
+pyvis>=0.3.2
 
-# ---- Utilities ----
-python-dotenv==1.0.1
-audio-recorder-streamlit==0.0.9
-SpeechRecognition==3.10.1
-pyyaml==6.0.2
-python-multipart==0.0.9
-typing_extensions==4.10.0
-tiktoken==0.7.0
+# Data handling
+pandas==2.2.2
+numpy==1.26.4
+PyPDF2==3.0.1
+python-dotenv>=1.0.0
+typing_extensions>=4.5.0
 
+# Optional NLP (used for entity extraction)
+spacy==3.8.11
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
