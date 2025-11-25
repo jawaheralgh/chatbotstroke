@@ -404,6 +404,28 @@ def transcribe_audio(audio_bytes):
 
 
 ###############################################################################
+# HELPER FUNCTIONS FOR SPEED OPTIMIZATION
+###############################################################################
+def is_greeting(text):
+    """Check if input is a simple greeting"""
+    greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 
+                 'good evening', 'howdy', 'greetings', 'hey there', 'hi there']
+    text_lower = text.lower().strip()
+    return any(text_lower == g or text_lower.startswith(g + ' ') for g in greetings)
+
+
+def quick_greeting_response():
+    """Return a warm greeting without RAG"""
+    import random
+    responses = [
+        "Hello! I'm here to help you with any questions about driving after stroke. How can I support you today?",
+        "Hi there! It's good to hear from you. What would you like to know about returning to driving?",
+        "Hello! I'm glad you're here. Feel free to ask me anything about driving after a stroke.",
+    ]
+    return random.choice(responses)
+
+
+###############################################################################
 # LANGGRAPH MULTI-AGENT PIPELINE
 ###############################################################################
 from typing import TypedDict
@@ -413,15 +435,21 @@ class State(TypedDict):
     raw_context: str
     summary: str
     messages: list
+    context_length: int
 
 
 def retrieve_node(state: State):
     state["raw_context"] = retrieve_context(state["query"])
+    state["context_length"] = len(state["raw_context"])
     return state
 
 
 def summarize_node(state: State):
-    state["summary"] = summarize_context(state["raw_context"])
+    # Only summarize if context is long (saves 1 LLM call for short contexts)
+    if state["context_length"] > 1500:
+        state["summary"] = summarize_context(state["raw_context"])
+    else:
+        state["summary"] = state["raw_context"]
     return state
 
 
@@ -476,6 +504,12 @@ if "messages" not in st.session_state:
 
 if "show_graph" not in st.session_state:
     st.session_state.show_graph = False
+
+if "last_audio_bytes" not in st.session_state:
+    st.session_state.last_audio_bytes = None
+
+if "processing" not in st.session_state:
+    st.session_state.processing = False
 
 
 # Sidebar
@@ -553,15 +587,19 @@ with col2:
         st.markdown("#### 🎤 Voice")
         audio_bytes = audio_recorder("", "#e74c3c", "#3498db", "1x")
 
-        if audio_bytes:
+        # Check if this is NEW audio (not already processed)
+        if audio_bytes and audio_bytes != st.session_state.last_audio_bytes and not st.session_state.processing:
+            st.session_state.processing = True
+            st.session_state.last_audio_bytes = audio_bytes
+            
             with st.spinner("🎤 Transcribing audio..."):
                 transcribed = transcribe_audio(audio_bytes)
 
             if not transcribed.startswith("Sorry") and not transcribed.startswith("Error"):
-                st.success(f"Heard: {transcribed[:50]}...")
                 user_input = transcribed
             else:
                 st.error(transcribed)
+                st.session_state.processing = False
     else:
         st.info("Install audio-recorder-streamlit for voice input")
 
@@ -573,26 +611,38 @@ if user_input:
 
     st.session_state.messages.append(HumanMessage(content=user_input))
 
-    with st.spinner("🤔 Thinking..."):
-        result = app.invoke(
-            {"query": user_input, "messages": st.session_state.messages}
-        )
-        retrieved_ids = graph_retrieve(user_input)
+    # FAST PATH: Skip RAG pipeline for greetings
+    if is_greeting(user_input):
+        ai_reply = quick_greeting_response()
+        st.session_state.messages.append(AIMessage(content=ai_reply))
+        
+        with st.chat_message("assistant", avatar="👩‍⚕️"):
+            st.markdown(ai_reply)
+    else:
+        # FULL PIPELINE: For medical questions
+        with st.spinner("🤔 Thinking..."):
+            result = app.invoke(
+                {"query": user_input, "messages": st.session_state.messages, 
+                 "context_length": 0}
+            )
+            retrieved_ids = graph_retrieve(user_input)
 
-    ai_reply = result["messages"][-1].content
+        ai_reply = result["messages"][-1].content
 
-    with st.chat_message("assistant", avatar="👩‍⚕️"):
-        st.markdown(ai_reply)
+        with st.chat_message("assistant", avatar="👩‍⚕️"):
+            st.markdown(ai_reply)
 
-    st.session_state.messages = result["messages"]
+        st.session_state.messages = result["messages"]
 
-    if retrieved_ids:
-        with st.expander(f"📚 Retrieved {len(retrieved_ids)} chunks"):
-            st.write("The AI used information from these knowledge areas:")
-            for i, cid in enumerate(retrieved_ids[:3]):
-                if cid in chunk_map:
-                    st.markdown(
-                        f"**Chunk {i+1}:** {chunk_map[cid]['text'][:200]}..."
-                    )
-
+        if retrieved_ids:
+            with st.expander(f"📚 Retrieved {len(retrieved_ids)} chunks"):
+                st.write("The AI used information from these knowledge areas:")
+                for i, cid in enumerate(retrieved_ids[:3]):
+                    if cid in chunk_map:
+                        st.markdown(
+                            f"**Chunk {i+1}:** {chunk_map[cid]['text'][:200]}..."
+                        )
+    
+    # Reset processing flag
+    st.session_state.processing = False
     st.rerun()
