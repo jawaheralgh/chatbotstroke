@@ -9,8 +9,8 @@ langchain-community>=0.3.0
 langchain-groq>=0.1.0
 langgraph>=0.0.20
 
-# Local FAISS vector store
-faiss-cpu==1.8.0
+# Local FAISS vector store - FIXED VERSION
+faiss-cpu>=1.9.0
 sentence-transformers==3.0.1
 langchain-huggingface>=0.0.3
 
