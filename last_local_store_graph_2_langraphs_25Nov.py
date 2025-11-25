@@ -511,6 +511,9 @@ if "last_audio_bytes" not in st.session_state:
 if "processing" not in st.session_state:
     st.session_state.processing = False
 
+if "app_initialized" not in st.session_state:
+    st.session_state.app_initialized = True
+
 
 # Sidebar
 with st.sidebar:
@@ -583,12 +586,16 @@ with col1:
         user_input = text_input
 
 with col2:
-    if HAS_AUDIO_RECORDER:
-        st.markdown("#### 🎤 Voice")
-        audio_bytes = audio_recorder("", "#e74c3c", "#3498db", "1x")
-
-        # Check if this is NEW audio (not already processed)
-        if audio_bytes and audio_bytes != st.session_state.last_audio_bytes and not st.session_state.processing:
+    st.markdown("#### 🎤 Voice")
+    
+    # Use Streamlit's native audio input (more stable)
+    audio_value = st.audio_input("Record your question", key="voice_input")
+    
+    if audio_value is not None:
+        # Check if this is NEW audio
+        audio_bytes = audio_value.getvalue()
+        
+        if audio_bytes != st.session_state.last_audio_bytes and not st.session_state.processing:
             st.session_state.processing = True
             st.session_state.last_audio_bytes = audio_bytes
             
@@ -600,8 +607,6 @@ with col2:
             else:
                 st.error(transcribed)
                 st.session_state.processing = False
-    else:
-        st.info("Install audio-recorder-streamlit for voice input")
 
 
 # Processing
