@@ -36,12 +36,17 @@ except ImportError:
 
 
 ###############################################################################
+# PAGE CONFIG - MUST BE FIRST STREAMLIT COMMAND
+###############################################################################
+st.set_page_config(page_title="Stroke Guidance Assistant", page_icon="🏥", layout="wide")
+
+
+###############################################################################
 # ENV + INITIALIZATION
 ###############################################################################
 load_dotenv()
 
 
-# Define the function BEFORE calling it
 @st.cache_resource
 def load_embeddings():
     return HuggingFaceEmbeddings(
@@ -54,7 +59,7 @@ def load_embeddings():
 @st.cache_resource
 def load_local_vector_store():
     """Load FAISS index from local folder 'faiss_index'."""
-    embeddings_model = load_embeddings()  # Call it here instead
+    embeddings_model = load_embeddings()
     try:
         try:
             vs = FAISS.load_local(
@@ -64,10 +69,7 @@ def load_local_vector_store():
             )
         except TypeError:
             vs = FAISS.load_local("faiss_index", embeddings_model)
-
-        st.success("✅ Loaded local FAISS vector store!")
         return vs
-
     except Exception as e:
         st.error(f"❌ Could not load local FAISS index: {e}")
         st.stop()
@@ -96,10 +98,11 @@ def load_kg_and_map():
     return nlp_local, G, chunk_map_local, list(G.nodes)
 
 
-# NOW call the functions
+# Load resources
 embeddings = load_embeddings()
 vector_store = load_local_vector_store()
 nlp, KG, chunk_map, node_names = load_kg_and_map()
+
 
 ###############################################################################
 # GRAPH RETRIEVAL HELPERS
@@ -112,10 +115,8 @@ def extract_entities_from_text(text):
 def find_matching_nodes(entity, nodes, cutoff=0.6):
     lower_entity = entity.lower()
     exact = [n for n in nodes if n.lower() == lower_entity]
-
     if exact:
         return exact
-
     return difflib.get_close_matches(entity, nodes, n=3, cutoff=cutoff)
 
 
@@ -125,23 +126,18 @@ def graph_retrieve(query, depth=1):
 
     for e in ents:
         matches = find_matching_nodes(e, node_names)
-
         for node in matches:
             found_ids.update(KG.nodes[node].get("chunk_ids", []))
-
             frontier = {node}
             for _ in range(depth):
                 new_frontier = set()
-
                 for f in frontier:
                     for nb in KG.neighbors(f):
                         new_frontier.add(nb)
                         found_ids.update(KG.nodes[nb].get("chunk_ids", []))
-
                 frontier = new_frontier
 
     return list(found_ids)
-
 
 
 ###############################################################################
@@ -152,7 +148,6 @@ llm = ChatGroq(
     temperature=0,
     groq_api_key=os.environ["GROQ_API_KEY"],
 )
-
 
 
 ###############################################################################
@@ -344,32 +339,29 @@ You speak as a supportive occupational therapist, using ONLY the retrieved conte
 """
 
 
-
 ###############################################################################
 # RETRIEVAL FUNCTIONS
 ###############################################################################
 def retrieve_context(query: str) -> str:
-    text_hits = []
-    if vector_store is not None:
-        try:
-            text_hits = vector_store.similarity_search(query, k=2)
-        except Exception as e:
-            st.warning(f"Vector similarity search failed: {e}")
-            text_hits = []
-    # graph retrieval as before (works with KG)
+    text_hits = vector_store.similarity_search(query, k=2)
     graph_ids = graph_retrieve(query, depth=1)
+
     graph_docs = []
     for cid in graph_ids:
         if cid in chunk_map:
-            graph_docs.append(Document(page_content=chunk_map[cid]["text"], metadata=chunk_map[cid].get("meta", {})))
+            graph_docs.append(
+                Document(
+                    page_content=chunk_map[cid]["text"],
+                    metadata=chunk_map[cid].get("meta", {}),
+                )
+            )
+
     combined = graph_docs + text_hits
     serialized = "\n\n".join(
         f"Source: {d.metadata.get('source', 'unknown')}\nContent: {d.page_content[:2000]}"
         for d in combined[:6]
     )
     return serialized
-
-
 
 
 def summarize_context(context: str) -> str:
@@ -381,22 +373,15 @@ def summarize_context(context: str) -> str:
     Context:
     {context}
     """
-
     result = llm.invoke(prompt)
     return result.content
-
 
 
 ###############################################################################
 # VOICE-TO-TEXT FUNCTION
 ###############################################################################
 def transcribe_audio(audio_bytes):
-    if not HAS_SPEECH_RECOGNITION:
-        return "Error: speech_recognition package unavailable on this environment."
-
-    import tempfile
     recognizer = sr.Recognizer()
-
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
             tmp_file.write(audio_bytes)
@@ -407,9 +392,9 @@ def transcribe_audio(audio_bytes):
             audio_data = recognizer.record(source)
 
         os.remove(tmp_file_path)
-
         text = recognizer.recognize_google(audio_data)
         return text
+
     except sr.UnknownValueError:
         return "Sorry, I couldn't understand the audio. Please try speaking more clearly."
     except sr.RequestError as e:
@@ -442,7 +427,6 @@ def summarize_node(state: State):
 
 def agent_node(state: State):
     conversation_history = ""
-
     for msg in state["messages"]:
         if isinstance(msg, HumanMessage):
             conversation_history += f"Patient: {msg.content}\n"
@@ -462,11 +446,9 @@ Patient: {state['query']}
 
 Pam:
 """
-
     response = llm.invoke(prompt)
     state["messages"].append(AIMessage(content=response.content))
     return state
-
 
 
 # Build workflow
@@ -483,12 +465,9 @@ workflow.add_edge("agent", END)
 app = workflow.compile()
 
 
-
 ###############################################################################
 # STREAMLIT UI
 ###############################################################################
-st.set_page_config(page_title="Stroke Guidance Assistant", page_icon="🏥", layout="wide")
-
 st.title("🏥 Stroke Patient Guidance Assistant")
 st.caption("Powered by Multi-Agent RAG with Hybrid Retrieval | 🎤 Voice Input Available")
 
@@ -535,18 +514,15 @@ with chat_container:
                 st.markdown(msg.content)
 
 
-
 # Knowledge Graph display
 if st.session_state.show_graph:
     st.subheader("🧠 Interactive Knowledge Graph")
-
     net_full = Network(
         height="500px", width="100%", bgcolor="#222222", font_color="white"
     )
     net_full.barnes_hut()
 
     nodes_to_show = list(KG.nodes())[:150]
-
     for node in nodes_to_show:
         net_full.add_node(node, label=node, color="skyblue", title=node)
 
@@ -556,19 +532,15 @@ if st.session_state.show_graph:
 
     try:
         net_full.save_graph("kg_full.html")
-
         with open("kg_full.html", "r", encoding="utf-8") as f:
             st.components.v1.html(f.read(), height=550)
     except Exception as e:
         st.error(f"Graph display error: {e}")
 
 
-
 # Input
 st.markdown("---")
-
 col1, col2 = st.columns([5, 1])
-
 user_input = None
 
 with col1:
@@ -589,7 +561,7 @@ with col2:
                 st.success(f"Heard: {transcribed[:50]}...")
                 user_input = transcribed
             else:
-                st.error(transscribed)
+                st.error(transcribed)
     else:
         st.info("Install audio-recorder-streamlit for voice input")
 
@@ -605,7 +577,6 @@ if user_input:
         result = app.invoke(
             {"query": user_input, "messages": st.session_state.messages}
         )
-
         retrieved_ids = graph_retrieve(user_input)
 
     ai_reply = result["messages"][-1].content
