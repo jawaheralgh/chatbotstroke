@@ -34,7 +34,18 @@ try:
 except ImportError:
     HAS_AUDIO_RECORDER = False
 
+import sys
+import traceback
 
+try:
+    # Your existing code here
+    load_dotenv()
+    embeddings = load_embeddings()
+    # etc...
+except Exception as e:
+    st.error(f"🔴 Startup Error: {str(e)}")
+    st.code(traceback.format_exc())
+    st.stop()
 
 ###############################################################################
 # ENV + INITIALIZATION
