@@ -354,27 +354,26 @@ You speak as a supportive occupational therapist, using ONLY the retrieved conte
 # RETRIEVAL FUNCTIONS
 ###############################################################################
 def retrieve_context(query: str) -> str:
-    text_hits = vector_store.similarity_search(query, k=2)
-
+    text_hits = []
+    if vector_store is not None:
+        try:
+            text_hits = vector_store.similarity_search(query, k=2)
+        except Exception as e:
+            st.warning(f"Vector similarity search failed: {e}")
+            text_hits = []
+    # graph retrieval as before (works with KG)
     graph_ids = graph_retrieve(query, depth=1)
-
     graph_docs = []
     for cid in graph_ids:
         if cid in chunk_map:
-            graph_docs.append(
-                Document(
-                    page_content=chunk_map[cid]["text"],
-                    metadata=chunk_map[cid].get("meta", {}),
-                )
-            )
-
+            graph_docs.append(Document(page_content=chunk_map[cid]["text"], metadata=chunk_map[cid].get("meta", {})))
     combined = graph_docs + text_hits
-
     serialized = "\n\n".join(
         f"Source: {d.metadata.get('source', 'unknown')}\nContent: {d.page_content[:2000]}"
         for d in combined[:6]
     )
     return serialized
+
 
 
 
@@ -397,6 +396,10 @@ def summarize_context(context: str) -> str:
 # VOICE-TO-TEXT FUNCTION
 ###############################################################################
 def transcribe_audio(audio_bytes):
+    if not HAS_SPEECH_RECOGNITION:
+        return "Error: speech_recognition package unavailable on this environment."
+
+    import tempfile
     recognizer = sr.Recognizer()
 
     try:
@@ -412,14 +415,12 @@ def transcribe_audio(audio_bytes):
 
         text = recognizer.recognize_google(audio_data)
         return text
-
     except sr.UnknownValueError:
         return "Sorry, I couldn't understand the audio. Please try speaking more clearly."
     except sr.RequestError as e:
         return f"Could not request results from speech service; {e}"
     except Exception as e:
         return f"Error processing audio: {str(e)}"
-
 
 
 ###############################################################################
