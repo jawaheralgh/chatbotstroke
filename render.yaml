@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: stroke-therapy-rag
+    env: python
+    region: singapore
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "streamlit run app.py --server.port=$PORT --server.address=0.0.0.0"
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
