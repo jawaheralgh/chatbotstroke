@@ -1,17 +1,33 @@
-streamlit>=1.24.0
-spacy>=3.5.0
-en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.5.0/en_core_web_sm-3.5.0-py3-none-any.whl
-langchain>=0.0.300
-langgraph>=0.0.20
-networkx>=3.1
-pyvis>=0.2.1
-faiss-cpu>=1.7.4
-sentence-transformers>=2.2.2
-langchain-huggingface>=0.0.9
-langchain-groq>=0.1.0
-python-dotenv>=1.0.0
-audio-recorder-streamlit>=0.0.6
-SpeechRecognition>=3.8.1
-pyyaml>=6.0
-python-multipart>=0.0.5
-typing_extensions>=4.5.0
+streamlit==1.39.0
+
+# ---- spaCy ----
+spacy==3.7.2
+# Prevent BLIS from compiling from source
+blis==0.7.11 --only-binary=:all:
+
+# spaCy will auto-download the model inside app.py
+# DO NOT include en-core-web-sm wheel link
+
+# ---- LangChain Stack ----
+langchain==0.2.10
+langgraph==0.2.3
+networkx==3.1
+pyvis==0.3.2
+
+# ---- Vector & Embeddings ----
+faiss-cpu==1.7.4
+sentence-transformers==3.0.1
+
+# ---- LLM Providers ----
+langchain-huggingface==0.0.10
+langchain-groq==0.1.0
+
+# ---- Utilities ----
+python-dotenv==1.0.1
+audio-recorder-streamlit==0.0.9
+SpeechRecognition==3.10.1
+pyyaml==6.0.2
+python-multipart==0.0.9
+typing_extensions==4.10.0
+tiktoken==0.7.0
+
